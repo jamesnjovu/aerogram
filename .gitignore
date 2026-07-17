@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# env & secrets
+.env
+.env.local
+*.local
+
+# runtime data
+apps/server/data/
+apps/server/.cache/
+*.sqlite
+*.sqlite-*
+*.db
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/

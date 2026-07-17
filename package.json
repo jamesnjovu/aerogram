@@ -1,0 +1,25 @@
+{
+  "name": "web-telegram",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A web-based Telegram client (MTProto) — login, chats, messages, media, live updates.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @wt/server",
+    "dev:web": "npm run dev -w @wt/web",
+    "build": "npm run build -w @wt/web",
+    "start:server": "npm run start -w @wt/server",
+    "typecheck": "npm run typecheck -w @wt/shared && npm run typecheck -w @wt/server && npm run typecheck -w @wt/web",
+    "test": "npm run test -w @wt/server"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
