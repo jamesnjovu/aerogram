@@ -50,4 +50,4 @@ app.setErrorHandler((err, req, reply) => {
 createSocketServer(app.server);
 
 await app.listen({ port: config.PORT, host: "0.0.0.0" });
-app.log.info(`Web Telegram backend listening on http://localhost:${config.PORT}`);
+app.log.info(`Aerogram backend listening on http://localhost:${config.PORT}`);

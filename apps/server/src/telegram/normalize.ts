@@ -1,5 +1,5 @@
 import { Api } from "telegram";
-import type { ChatDTO, ChatType, MediaMeta, MediaType, MessageDTO, MeDTO } from "@wt/shared";
+import type { ChatDTO, ChatType, MediaMeta, MediaType, MessageDTO, MeDTO } from "@aerogram/shared";
 
 /**
  * Convert GramJS objects into the plain DTOs the frontend consumes.

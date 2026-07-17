@@ -1,6 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { Server as IOServer } from "socket.io";
-import type { ServerToClientEvents, ClientToServerEvents } from "@wt/shared";
+import type { ServerToClientEvents, ClientToServerEvents } from "@aerogram/shared";
 import { config } from "../config";
 import { clientManager } from "../telegram/clientManager";
 import { readUserIdFromCookieHeader } from "../http/middleware/session";

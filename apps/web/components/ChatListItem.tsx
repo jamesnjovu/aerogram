@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ChatDTO } from "@wt/shared";
+import type { ChatDTO } from "@aerogram/shared";
 import { Avatar } from "./Avatar";
 import { dayLabel } from "@/lib/format";
 

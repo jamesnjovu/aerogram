@@ -5,7 +5,7 @@ import type {
   SendMessageResponse,
   SessionResponse,
   SendCodeResponse,
-} from "@wt/shared";
+} from "@aerogram/shared";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { MeDTO } from "@wt/shared";
+import type { MeDTO } from "@aerogram/shared";
 import { clientManager } from "../../telegram/clientManager";
 import { signInWithCode, checkPassword } from "../../telegram/auth";
 import { upsertUser, getUserById, type UserRow } from "../../store/db";

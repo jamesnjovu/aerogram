@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { MeDTO } from "@wt/shared";
+import type { MeDTO } from "@aerogram/shared";
 
 interface AuthState {
   me: MeDTO | null;

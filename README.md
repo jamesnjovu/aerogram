@@ -1,4 +1,4 @@
-# Web Telegram
+# Aerogram
 
 A **web-based Telegram client** built on Telegram's MTProto Client API (the same API used by
 Telegram's official web clients and by GramJS/Telethon). It supports real login, a chat list,

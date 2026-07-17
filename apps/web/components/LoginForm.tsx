@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { MeDTO } from "@wt/shared";
+import type { MeDTO } from "@aerogram/shared";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/store/useAuth";
 
@@ -84,7 +84,7 @@ export function LoginForm() {
         <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-sky-500 text-3xl">
           ✈️
         </div>
-        <h1 className="text-xl font-semibold">Web Telegram</h1>
+        <h1 className="text-xl font-semibold">Aerogram</h1>
         <p className="mt-1 text-sm text-slate-400">
           {step === "phone" && "Enter your phone number to sign in"}
           {step === "code" && "Enter the code Telegram sent you"}

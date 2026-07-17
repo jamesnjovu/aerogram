@@ -1,5 +1,5 @@
 {
-  "name": "@wt/web",
+  "name": "@aerogram/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.11",
-    "@wt/shared": "*",
+    "@aerogram/shared": "*",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

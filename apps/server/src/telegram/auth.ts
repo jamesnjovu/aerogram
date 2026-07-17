@@ -1,6 +1,6 @@
 import { Api, type TelegramClient } from "telegram";
 import { computeCheck } from "telegram/Password";
-import type { MeDTO } from "@wt/shared";
+import type { MeDTO } from "@aerogram/shared";
 import { normalizeMe } from "./normalize";
 
 /** A user-facing auth error with a stable machine code. */

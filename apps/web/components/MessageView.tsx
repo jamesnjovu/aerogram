@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import type { DialogsResponse } from "@wt/shared";
+import type { DialogsResponse } from "@aerogram/shared";
 import { api } from "@/lib/api";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";

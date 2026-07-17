@@ -1,6 +1,6 @@
 "use client";
 
-import type { MessageDTO } from "@wt/shared";
+import type { MessageDTO } from "@aerogram/shared";
 import { timeLabel } from "@/lib/format";
 import { MediaAttachment } from "./MediaAttachment";
 

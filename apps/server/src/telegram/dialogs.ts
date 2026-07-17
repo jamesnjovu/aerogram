@@ -1,5 +1,5 @@
 import { type TelegramClient } from "telegram";
-import type { ChatDTO } from "@wt/shared";
+import type { ChatDTO } from "@aerogram/shared";
 import { normalizeDialog } from "./normalize";
 import { rememberEntity } from "./entityCache";
 

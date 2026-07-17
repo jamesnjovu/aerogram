@@ -1,4 +1,4 @@
-import type { ChatType } from "@wt/shared";
+import type { ChatType } from "@aerogram/shared";
 
 /** Two-letter initials for an avatar fallback. */
 export function initials(title: string): string {

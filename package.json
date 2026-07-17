@@ -1,5 +1,5 @@
 {
-  "name": "web-telegram",
+  "name": "aerogram",
   "version": "0.1.0",
   "private": true,
   "description": "A web-based Telegram client (MTProto) — login, chats, messages, media, live updates.",
@@ -9,12 +9,12 @@
   ],
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "npm run dev -w @wt/server",
-    "dev:web": "npm run dev -w @wt/web",
-    "build": "npm run build -w @wt/web",
-    "start:server": "npm run start -w @wt/server",
-    "typecheck": "npm run typecheck -w @wt/shared && npm run typecheck -w @wt/server && npm run typecheck -w @wt/web",
-    "test": "npm run test -w @wt/server"
+    "dev:server": "npm run dev -w @aerogram/server",
+    "dev:web": "npm run dev -w @aerogram/web",
+    "build": "npm run build -w @aerogram/web",
+    "start:server": "npm run start -w @aerogram/server",
+    "typecheck": "npm run typecheck -w @aerogram/shared && npm run typecheck -w @aerogram/server && npm run typecheck -w @aerogram/web",
+    "test": "npm run test -w @aerogram/server"
   },
   "engines": {
     "node": ">=22"

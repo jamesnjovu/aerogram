@@ -1,5 +1,5 @@
 {
-  "name": "@wt/server",
+  "name": "@aerogram/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.1",
-    "@wt/shared": "*",
+    "@aerogram/shared": "*",
     "big-integer": "^1.6.52",
     "fastify": "^5.2.1",
     "jsonwebtoken": "^9.0.2",

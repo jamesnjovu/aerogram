@@ -1,5 +1,5 @@
 import { type Api, type TelegramClient } from "telegram";
-import type { MessageDTO, MessagesResponse } from "@wt/shared";
+import type { MessageDTO, MessagesResponse } from "@aerogram/shared";
 import { normalizeMessage } from "./normalize";
 import { resolveInputPeer } from "./entityCache";
 

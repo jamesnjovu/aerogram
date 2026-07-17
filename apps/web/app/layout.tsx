@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Web Telegram",
+  title: "Aerogram",
   description: "A web-based Telegram client — chats, messages, media, live updates.",
 };
 

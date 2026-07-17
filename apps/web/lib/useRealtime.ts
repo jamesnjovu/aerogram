@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { MessageDTO } from "@wt/shared";
+import type { MessageDTO } from "@aerogram/shared";
 import { getSocket } from "./ws";
 
 /**

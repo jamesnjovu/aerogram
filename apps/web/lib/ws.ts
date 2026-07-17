@@ -1,7 +1,7 @@
 "use client";
 
 import { io, type Socket } from "socket.io-client";
-import type { ServerToClientEvents, ClientToServerEvents } from "@wt/shared";
+import type { ServerToClientEvents, ClientToServerEvents } from "@aerogram/shared";
 import { API_URL } from "./api";
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
