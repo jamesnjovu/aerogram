@@ -52,3 +52,40 @@ export async function getMessageById(
   const messages = await client.getMessages(peer, { ids: [messageId] });
   return messages[0] as Api.Message | undefined;
 }
+
+/** Forward messages from one chat to another. */
+export async function forwardMessages(
+  userId: number,
+  client: TelegramClient,
+  fromChatId: string,
+  toChatId: string,
+  messageIds: number[],
+): Promise<void> {
+  const fromPeer = await resolveInputPeer(userId, client, fromChatId);
+  const toPeer = await resolveInputPeer(userId, client, toChatId);
+  await client.forwardMessages(toPeer, { messages: messageIds, fromPeer });
+}
+
+/** Delete messages (revoke = for everyone where allowed). */
+export async function deleteMessages(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  messageIds: number[],
+): Promise<void> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  await client.deleteMessages(peer, messageIds, { revoke: true });
+}
+
+/** Edit the text of one of the user's own messages. */
+export async function editMessage(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  messageId: number,
+  text: string,
+): Promise<MessageDTO> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  const edited = await client.editMessage(peer, { message: messageId, text });
+  return normalizeMessage(edited, chatId);
+}

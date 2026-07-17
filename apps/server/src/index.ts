@@ -1,12 +1,15 @@
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { ZodError } from "zod";
 import { config } from "./config";
 import { authRoutes } from "./http/routes/auth";
 import { dialogRoutes } from "./http/routes/dialogs";
 import { messageRoutes } from "./http/routes/messages";
 import { mediaRoutes } from "./http/routes/media";
+import { profileRoutes } from "./http/routes/profile";
+import { chatRoutes } from "./http/routes/chats";
 import { createSocketServer } from "./ws/server";
 import { AuthError } from "./telegram/auth";
 import { UnauthorizedError } from "./telegram/clientManager";
@@ -18,6 +21,7 @@ const app = Fastify({
 
 await app.register(cors, { origin: config.WEB_ORIGIN, credentials: true });
 await app.register(cookie);
+await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
 
 app.get("/health", async () => ({ ok: true }));
 
@@ -25,6 +29,8 @@ await authRoutes(app);
 await dialogRoutes(app);
 await messageRoutes(app);
 await mediaRoutes(app);
+await profileRoutes(app);
+await chatRoutes(app);
 
 app.setErrorHandler((err, req, reply) => {
   if (err instanceof ZodError) {

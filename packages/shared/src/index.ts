@@ -15,6 +15,8 @@ export interface ChatDTO {
   lastMessage: { text: string; date: number } | null;
   /** Whether the chat has a profile photo (fetched lazily via the media endpoint). */
   hasPhoto: boolean;
+  /** Whether the logged-in user is allowed to send messages here (false for read-only channels). */
+  canPost: boolean;
 }
 
 export type MediaType =
@@ -50,6 +52,8 @@ export interface MessageDTO {
   out: boolean;
   replyToId: number | null;
   media: MediaMeta | null;
+  /** True for Telegram service messages (joins, title changes, pins, …); `text` holds a summary. */
+  service: boolean;
 }
 
 export interface MeDTO {
@@ -59,6 +63,109 @@ export interface MeDTO {
   username?: string;
   phone?: string;
 }
+
+export interface Birthday {
+  day: number;
+  month: number;
+  year?: number;
+}
+
+/** Full self-profile (from users.getFullUser) used by the settings page. */
+export interface ProfileDTO {
+  id: string;
+  firstName: string;
+  lastName?: string;
+  username?: string;
+  phone?: string;
+  bio?: string;
+  birthday?: Birthday;
+  hasPhoto: boolean;
+}
+
+export interface UpdateProfileRequest {
+  firstName?: string;
+  lastName?: string;
+  bio?: string;
+}
+
+export interface UpdateUsernameRequest {
+  username: string;
+}
+
+export type UpdateBirthdayRequest = Birthday;
+
+/* ------------------------------------------------------------------ */
+/* Drawer features: folders, calls, new group/channel                  */
+/* ------------------------------------------------------------------ */
+
+export interface FolderDTO {
+  /** 0 is the built-in "All chats" folder. */
+  id: number;
+  title: string;
+  emoticon?: string;
+}
+
+export interface CallDTO {
+  id: number;
+  /** Unix timestamp (seconds). */
+  date: number;
+  /** True if the logged-in user placed the call. */
+  out: boolean;
+  video: boolean;
+  duration?: number;
+  missed: boolean;
+}
+
+export interface CreateChatRequest {
+  title: string;
+  about?: string;
+}
+
+export interface CreateChatResponse {
+  /** Marked id of the created group/channel, usable in /chat/:id. */
+  id: string;
+}
+
+export interface ContactDTO {
+  id: string;
+  name: string;
+  username?: string;
+  phone?: string;
+  hasPhoto: boolean;
+}
+
+export interface ForwardRequest {
+  toChatId: string;
+  messageIds: number[];
+}
+
+export interface EditMessageRequest {
+  text: string;
+}
+
+export interface AddMembersRequest {
+  userIds: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Chat details + shared media                                         */
+/* ------------------------------------------------------------------ */
+
+export interface ChatInfoDTO {
+  id: string;
+  title: string;
+  type: ChatType;
+  username?: string;
+  about?: string;
+  memberCount?: number;
+  muted: boolean;
+  /** True for groups/channels the user can leave. */
+  canLeave: boolean;
+  /** Public/invite link, if any. */
+  link?: string;
+}
+
+export type SharedMediaType = "media" | "file" | "link" | "music" | "voice" | "gif";
 
 /* ------------------------------------------------------------------ */
 /* Auth payloads                                                       */

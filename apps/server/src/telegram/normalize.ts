@@ -37,6 +37,34 @@ function entityTitle(entity: unknown): string {
   return "Unknown";
 }
 
+/** Whether the logged-in user may send messages in this chat. */
+function computeCanPost(entity: unknown): boolean {
+  const e = entity as {
+    className?: string;
+    megagroup?: boolean;
+    creator?: boolean;
+    adminRights?: { postMessages?: boolean } | null;
+    defaultBannedRights?: { sendMessages?: boolean } | null;
+    left?: boolean;
+  };
+  const cls = e?.className;
+  if (cls === "Channel" || cls === "ChannelForbidden") {
+    if (e.megagroup) {
+      // Supergroup: can post unless everyone is banned from sending.
+      if (e.creator || e.adminRights) return true;
+      return !e.defaultBannedRights?.sendMessages;
+    }
+    // Broadcast channel: only the creator or admins with post rights can write.
+    return Boolean(e.creator || e.adminRights?.postMessages);
+  }
+  if (cls === "Chat" || cls === "ChatForbidden") {
+    if (e.creator || e.adminRights) return true;
+    return !e.defaultBannedRights?.sendMessages;
+  }
+  // Users, saved messages, etc.
+  return true;
+}
+
 /** A GramJS Dialog (from client.getDialogs()). Typed loosely — GramJS Dialog is a helper class. */
 export function normalizeDialog(dialog: any): ChatDTO {
   const entity = dialog.entity;
@@ -53,6 +81,7 @@ export function normalizeDialog(dialog: any): ChatDTO {
         }
       : null,
     hasPhoto: Boolean(entity?.photo && entity.photo.className !== "ChatPhotoEmpty"),
+    canPost: computeCanPost(entity),
   };
 }
 
@@ -127,17 +156,66 @@ function pickLargestPhotoSize(sizes: any[]): { w?: number; h?: number } | undefi
   return best ? { w: best.w, h: best.h } : undefined;
 }
 
-/** Normalize an Api.Message. `chatId` is the marked chat id string, `selfId` the logged-in user's id. */
+/** Display name of a message's sender, best-effort from the attached entity. */
+function senderName(msg: any): string {
+  const s = msg.sender;
+  if (!s) return "Someone";
+  if (s.title) return s.title;
+  const name = [s.firstName, s.lastName].filter(Boolean).join(" ").trim();
+  return name || s.username || "Someone";
+}
+
+/** Human-readable summary for a Telegram service (system) message. */
+function serviceText(msg: any): string {
+  const action = msg.action;
+  const who = senderName(msg);
+  switch (action?.className) {
+    case "MessageActionChatAddUser":
+    case "MessageActionChatJoinedByLink":
+    case "MessageActionChatJoinedByRequest":
+      return `${who} joined the group`;
+    case "MessageActionChatDeleteUser":
+      return `${who} left the group`;
+    case "MessageActionChatCreate":
+      return `${who} created the group`;
+    case "MessageActionChannelCreate":
+      return "Channel created";
+    case "MessageActionChatEditTitle":
+      return `Group renamed to “${action.title}”`;
+    case "MessageActionChatEditPhoto":
+      return "Group photo updated";
+    case "MessageActionChatDeletePhoto":
+      return "Group photo removed";
+    case "MessageActionPinMessage":
+      return `${who} pinned a message`;
+    case "MessageActionChatMigrateTo":
+    case "MessageActionChannelMigrateFrom":
+      return "Group upgraded to a supergroup";
+    case "MessageActionContactSignUp":
+      return `${who} joined Telegram`;
+    case "MessageActionCustomAction":
+      return action.message ?? "";
+    case "MessageActionGroupCall":
+    case "MessageActionGroupCallScheduled":
+      return "Group call";
+    default:
+      return "";
+  }
+}
+
+/** Normalize an Api.Message or Api.MessageService. `chatId` is the marked chat id string. */
 export function normalizeMessage(msg: any, chatId: string): MessageDTO {
+  const isService = msg.className === "MessageService";
   return {
     id: msg.id,
     chatId,
     senderId: idStr(msg.senderId ?? msg.fromId?.userId ?? null),
-    text: msg.message ?? "",
+    text: isService ? serviceText(msg) : msg.message ?? "",
     date: msg.date ?? 0,
     out: Boolean(msg.out),
     replyToId: msg.replyTo?.replyToMsgId ?? null,
-    media: normalizeMediaMeta(msg.media),
+    media: isService ? null : normalizeMediaMeta(msg.media),
+    service: isService,
   };
 }
 

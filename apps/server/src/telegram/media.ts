@@ -65,7 +65,19 @@ function describe(msg: any, thumb: boolean): { contentType: string; fileName: st
   };
 }
 
-/** Download (and cache) the media attached to a message. thumb=true fetches the small preview. */
+/** Pick the largest real thumbnail (skips the tiny stripped/path placeholders). */
+function pickLargestThumb(msg: any): unknown {
+  const list: any[] = msg?.media?.document?.thumbs ?? msg?.media?.photo?.sizes ?? [];
+  let best: any = null;
+  for (const t of list) {
+    if (t.className === "PhotoStrippedSize" || t.className === "PhotoPathSize") continue;
+    const w = t.w ?? (Array.isArray(t.sizes) ? Number.MAX_SAFE_INTEGER : 0);
+    if (!best || w > (best.w ?? 0)) best = t;
+  }
+  return best ?? 0; // fall back to the smallest-index thumb
+}
+
+/** Download (and cache) the media attached to a message. thumb=true fetches a preview image. */
 export async function downloadForMessage(
   userId: number,
   client: TelegramClient,
@@ -73,14 +85,18 @@ export async function downloadForMessage(
   messageId: number,
   thumb: boolean,
 ): Promise<DownloadResult | null> {
-  const key = keyFor(`${userId}:${chatId}:${messageId}:${thumb ? "t" : "f"}`);
+  // "t2" cache version — bumped when we switched thumbs from smallest → largest.
+  const key = keyFor(`${userId}:${chatId}:${messageId}:${thumb ? "t2" : "f"}`);
   const cached = readCache(key);
   if (cached) return cached;
 
   const msg = await getMessageById(userId, client, chatId, messageId);
   if (!msg || !(msg as { media?: unknown }).media) return null;
 
-  const data = await client.downloadMedia(msg, thumb ? { thumb: 0 } : {});
+  const data = await client.downloadMedia(
+    msg,
+    thumb ? { thumb: pickLargestThumb(msg) as never } : {},
+  );
   const buffer = toBuffer(data);
   if (!buffer) return null;
 

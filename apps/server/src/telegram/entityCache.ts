@@ -75,3 +75,30 @@ export async function resolveInputPeer(
     return (await client.getInputEntity(bigInt(markedId))) as Api.TypeInputPeer;
   }
 }
+
+/** Resolve a user's marked id into an InputUser (for invites, etc.). */
+export async function resolveInputUser(
+  userId: number,
+  client: TelegramClient,
+  markedId: string,
+): Promise<Api.TypeInputUser> {
+  const peer = (await resolveInputPeer(userId, client, markedId)) as any;
+  if (peer.className === "InputPeerUser") {
+    return new Api.InputUser({ userId: peer.userId, accessHash: peer.accessHash });
+  }
+  if (peer.className === "InputPeerSelf") return new Api.InputUserSelf();
+  throw new Error("Not a user");
+}
+
+/** Resolve a channel/supergroup's marked id into an InputChannel. */
+export async function resolveInputChannel(
+  userId: number,
+  client: TelegramClient,
+  markedId: string,
+): Promise<Api.TypeInputChannel> {
+  const peer = (await resolveInputPeer(userId, client, markedId)) as any;
+  if (peer.className === "InputPeerChannel") {
+    return new Api.InputChannel({ channelId: peer.channelId, accessHash: peer.accessHash });
+  }
+  throw new Error("Not a channel");
+}

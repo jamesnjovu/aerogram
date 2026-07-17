@@ -7,9 +7,11 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), h
 
 export async function dialogRoutes(app: FastifyInstance): Promise<void> {
   app.get("/dialogs", { preHandler: requireAuth }, async (req) => {
-    const limit = clamp(Number((req.query as { limit?: string }).limit ?? 50) || 50, 1, 200);
+    const q = req.query as { limit?: string; folderId?: string };
+    const limit = clamp(Number(q.limit ?? 50) || 50, 1, 200);
+    const folderId = Number(q.folderId ?? 0) || 0;
     const client = await clientManager.getClient(req.userId!);
-    const chats = await listDialogs(req.userId!, client, limit);
+    const chats = await listDialogs(req.userId!, client, limit, folderId);
     return { chats };
   });
 }

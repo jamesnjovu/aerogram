@@ -30,6 +30,16 @@ export function dayLabel(unixSeconds: number): string {
   return d.toLocaleDateString([], { day: "2-digit", month: "short" });
 }
 
+/** Duration as M:SS or H:MM:SS. */
+export function formatDuration(seconds?: number): string {
+  if (!seconds && seconds !== 0) return "";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 /** Human-readable file size. */
 export function fileSize(bytes?: number): string {
   if (!bytes && bytes !== 0) return "";

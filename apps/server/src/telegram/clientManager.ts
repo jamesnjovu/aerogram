@@ -56,10 +56,18 @@ class ClientManager {
       new StringSession(sessionString),
       config.API_ID,
       config.API_HASH,
-      { connectionRetries: 5, autoReconnect: true, useWSS: true },
+      {
+        connectionRetries: 5,
+        autoReconnect: true,
+        retryDelay: 1000,
+        // In Node, use the default TCP transport. WSS is for browsers and can stall
+        // while reconnecting to a phone number's home DC during sign-in.
+      },
     );
     try {
-      (client as unknown as { setLogLevel: (l: string) => void }).setLogLevel("error");
+      (client as unknown as { setLogLevel: (l: string) => void }).setLogLevel(
+        process.env.TG_LOG_LEVEL ?? "warn",
+      );
     } catch {
       /* older/newer GramJS may not expose setLogLevel */
     }
@@ -70,11 +78,14 @@ class ClientManager {
 
   async createPending(phone: string): Promise<{ tempToken: string; phoneCodeHash: string }> {
     const client = this.makeClient("");
+    console.log(`[auth] connecting to Telegram for ${phone} …`);
     await client.connect();
+    console.log("[auth] connected; requesting login code …");
     const { phoneCodeHash } = await client.sendCode(
       { apiId: config.API_ID, apiHash: config.API_HASH },
       phone,
     );
+    console.log("[auth] login code requested successfully");
     const tempToken = randomBytes(24).toString("hex");
     this.pending.set(tempToken, { client, phone, phoneCodeHash, createdAt: Date.now() });
     return { tempToken, phoneCodeHash };
