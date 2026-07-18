@@ -1,0 +1,41 @@
+# Aerogram deployment. Copy .env.docker.example to .env and fill it in, then:
+#   docker compose up -d --build
+#
+# Both services run from the same image (built once by the `server` service).
+
+services:
+  server:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    image: aerogram
+    command: npm run start:prod -w @aerogram/server
+    environment:
+      API_ID: ${API_ID}
+      API_HASH: ${API_HASH}
+      SESSION_ENC_KEY: ${SESSION_ENC_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: "4000"
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      DATA_DIR: /data
+      MEDIA_CACHE_DIR: /cache
+    volumes:
+      - aerogram-data:/data
+      - aerogram-cache:/cache
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  web:
+    image: aerogram
+    command: npm run start -w @aerogram/web
+    depends_on:
+      - server
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  aerogram-data:
+  aerogram-cache:

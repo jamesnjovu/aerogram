@@ -1,0 +1,19 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.gitignore
+*.log
+npm-debug.log*
+
+# secrets & runtime data
+.env
+**/.env
+apps/server/data
+apps/server/.cache
+
+# editor / os
+.DS_Store
+.idea
+.vscode

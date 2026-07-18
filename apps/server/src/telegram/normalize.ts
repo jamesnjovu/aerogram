@@ -1,5 +1,13 @@
 import { Api } from "telegram";
-import type { ChatDTO, ChatType, MediaMeta, MediaType, MessageDTO, MeDTO } from "@aerogram/shared";
+import type {
+  ChatDTO,
+  ChatType,
+  MediaMeta,
+  MediaType,
+  MessageButton,
+  MessageDTO,
+  MeDTO,
+} from "@aerogram/shared";
 
 /**
  * Convert GramJS objects into the plain DTOs the frontend consumes.
@@ -82,6 +90,9 @@ export function normalizeDialog(dialog: any): ChatDTO {
       : null,
     hasPhoto: Boolean(entity?.photo && entity.photo.className !== "ChatPhotoEmpty"),
     canPost: computeCanPost(entity),
+    isBot: Boolean((entity as { className?: string; bot?: boolean })?.className === "User" &&
+      (entity as { bot?: boolean }).bot),
+    username: (entity as { username?: string })?.username || undefined,
   };
 }
 
@@ -145,6 +156,24 @@ export function normalizeMediaMeta(media: unknown): MediaMeta | null {
     };
   }
 
+  if (cls === "MessageMediaGeo" || cls === "MessageMediaGeoLive") {
+    return { type: "location", lat: m.geo?.lat, long: m.geo?.long, hasThumb: false };
+  }
+
+  if (cls === "MessageMediaPoll") {
+    const p = m.poll;
+    const question = typeof p?.question === "string" ? p.question : (p?.question?.text ?? "");
+    const options = (p?.answers ?? []).map((a: any) =>
+      typeof a.text === "string" ? a.text : (a.text?.text ?? ""),
+    );
+    return { type: "poll", question, options, hasThumb: false };
+  }
+
+  if (cls === "MessageMediaContact") {
+    const name = [m.firstName, m.lastName].filter(Boolean).join(" ").trim();
+    return { type: "contact", fileName: name || "Contact", phone: m.phoneNumber, hasThumb: false };
+  }
+
   return { type: "other", hasThumb: false };
 }
 
@@ -203,9 +232,51 @@ function serviceText(msg: any): string {
   }
 }
 
+/** Details for a phone/video call service message, or null. */
+function callInfo(msg: any): { video: boolean; missed: boolean; duration?: number } | null {
+  const action = msg.action;
+  if (action?.className !== "MessageActionPhoneCall") return null;
+  const reason: string | undefined = action.reason?.className;
+  return {
+    video: Boolean(action.video),
+    missed:
+      reason === "PhoneCallDiscardReasonMissed" || reason === "PhoneCallDiscardReasonBusy",
+    duration: action.duration ?? undefined,
+  };
+}
+
+/** Normalize a message's inline/reply keyboard (bots) into plain button rows. */
+function normalizeButtons(rm: any): MessageButton[][] | undefined {
+  const rows = rm?.rows;
+  if (!Array.isArray(rows)) return undefined;
+  const out: MessageButton[][] = rows.map((row: any) =>
+    (row.buttons ?? []).map((b: any): MessageButton => {
+      switch (b.className) {
+        case "KeyboardButtonCallback":
+          return {
+            text: b.text,
+            kind: "callback",
+            data: Buffer.from(b.data ?? []).toString("base64"),
+          };
+        case "KeyboardButtonUrl":
+        case "KeyboardButtonWebView":
+        case "KeyboardButtonSimpleWebView":
+          return { text: b.text, kind: "url", url: b.url };
+        case "KeyboardButton":
+          return { text: b.text, kind: "text" };
+        default:
+          return { text: b.text ?? "Button", kind: "other" };
+      }
+    }),
+  );
+  return out.length ? out : undefined;
+}
+
 /** Normalize an Api.Message or Api.MessageService. `chatId` is the marked chat id string. */
 export function normalizeMessage(msg: any, chatId: string): MessageDTO {
   const isService = msg.className === "MessageService";
+  const call = callInfo(msg);
+  const buttons = isService ? undefined : normalizeButtons(msg.replyMarkup);
   return {
     id: msg.id,
     chatId,
@@ -216,6 +287,8 @@ export function normalizeMessage(msg: any, chatId: string): MessageDTO {
     replyToId: msg.replyTo?.replyToMsgId ?? null,
     media: isService ? null : normalizeMediaMeta(msg.media),
     service: isService,
+    ...(call ? { call } : {}),
+    ...(buttons ? { buttons } : {}),
   };
 }
 

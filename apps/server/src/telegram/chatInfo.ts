@@ -1,6 +1,12 @@
 import bigInt from "big-integer";
 import { Api, type TelegramClient } from "telegram";
-import type { ChatInfoDTO, ChatType, MessagesResponse, SharedMediaType } from "@aerogram/shared";
+import type {
+  BotCommand,
+  ChatInfoDTO,
+  ChatType,
+  MessagesResponse,
+  SharedMediaType,
+} from "@aerogram/shared";
 import {
   resolveInputPeer,
   resolveInputChannel,
@@ -173,4 +179,20 @@ export async function searchSharedMedia(
   const oldest = raw[raw.length - 1];
   const nextOffsetId = raw.length >= limit && oldest ? oldest.id : null;
   return { messages, nextOffsetId };
+}
+
+/** Bot commands for a bot chat (empty for non-bots). */
+export async function getBotCommands(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+): Promise<BotCommand[]> {
+  const row = getEntity(userId, chatId);
+  if (row?.type !== "user") return [];
+  const input = await resolveInputUser(userId, client, chatId);
+  const full = (await client.invoke(new Api.users.GetFullUser({ id: input }))) as any;
+  if (!full.users?.[0]?.bot) return [];
+  const bi = full.fullUser?.botInfo;
+  const commands = (Array.isArray(bi) ? bi[0]?.commands : bi?.commands) ?? [];
+  return commands.map((c: any) => ({ command: c.command, description: c.description }));
 }

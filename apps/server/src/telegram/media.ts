@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { type TelegramClient } from "telegram";
 import { config } from "../config";
 import { normalizeMediaMeta } from "./normalize";
@@ -103,6 +104,34 @@ export async function downloadForMessage(
   const result: DownloadResult = { buffer, ...describe(msg, thumb) };
   writeCache(key, result);
   return result;
+}
+
+export interface StreamResult {
+  stream: Readable;
+  contentType: string;
+  fileName: string;
+  size?: number;
+}
+
+/**
+ * Stream a document (video/audio/file) straight from Telegram to the client, chunk by chunk,
+ * instead of buffering the whole file server-side first. Returns null for non-documents
+ * (photos etc.), which fall back to the buffered path.
+ */
+export async function streamMedia(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  messageId: number,
+): Promise<StreamResult | null> {
+  const msg = await getMessageById(userId, client, chatId, messageId);
+  const media = (msg as { media?: any })?.media;
+  if (!media || media.className !== "MessageMediaDocument") return null;
+
+  const { contentType, fileName } = describe(msg, false);
+  const meta = normalizeMediaMeta(media);
+  const iter = (client as any).iterDownload({ file: media, requestSize: 512 * 1024 });
+  return { stream: Readable.from(iter), contentType, fileName, size: meta?.size };
 }
 
 /** Download (and cache) a chat's profile photo (small size). */

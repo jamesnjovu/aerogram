@@ -1,5 +1,12 @@
-import { type Api, type TelegramClient } from "telegram";
-import type { MessageDTO, MessagesResponse } from "@aerogram/shared";
+import { Api, type TelegramClient } from "telegram";
+import { CustomFile } from "telegram/client/uploads";
+import { generateRandomLong } from "telegram/Helpers";
+import type {
+  AttachmentKind,
+  BotCallbackResponse,
+  MessageDTO,
+  MessagesResponse,
+} from "@aerogram/shared";
 import { normalizeMessage } from "./normalize";
 import { resolveInputPeer } from "./entityCache";
 
@@ -88,4 +95,113 @@ export async function editMessage(
   const peer = await resolveInputPeer(userId, client, chatId);
   const edited = await client.editMessage(peer, { message: messageId, text });
   return normalizeMessage(edited, chatId);
+}
+
+/** Send an uploaded file as a photo / video / document / music / voice note. */
+export async function sendAttachment(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  opts: { kind: AttachmentKind; buffer: Buffer; filename: string; caption?: string },
+): Promise<void> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  const file = new CustomFile(opts.filename || "file", opts.buffer.length, "", opts.buffer);
+  const params: Record<string, unknown> = { file, caption: opts.caption };
+  switch (opts.kind) {
+    case "file":
+      params.forceDocument = true;
+      break;
+    case "video":
+      params.supportsStreaming = true;
+      break;
+    case "voice":
+      params.voiceNote = true;
+      break;
+    case "music":
+      params.attributes = [
+        new Api.DocumentAttributeAudio({ duration: 0, title: opts.filename, voice: false }),
+      ];
+      break;
+    default:
+      break; // photo → GramJS sends as a photo
+  }
+  await client.sendFile(peer, params as never);
+}
+
+/** Press an inline callback button; returns the bot's answer (toast/alert/url). */
+export async function botCallback(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  messageId: number,
+  dataB64: string,
+): Promise<BotCallbackResponse> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  const res = (await client.invoke(
+    new Api.messages.GetBotCallbackAnswer({
+      peer,
+      msgId: messageId,
+      data: Buffer.from(dataB64, "base64"),
+    }),
+  )) as any;
+  return { text: res.message ?? undefined, alert: Boolean(res.alert), url: res.url ?? undefined };
+}
+
+/** Send a geo location. */
+export async function sendLocation(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  lat: number,
+  long: number,
+): Promise<void> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  await client.invoke(
+    new Api.messages.SendMedia({
+      peer,
+      media: new Api.InputMediaGeoPoint({ geoPoint: new Api.InputGeoPoint({ lat, long }) }),
+      message: "",
+      randomId: generateRandomLong(),
+    }),
+  );
+}
+
+/** Send a poll (supports anonymous toggle and quiz mode). */
+export async function sendPoll(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  question: string,
+  options: string[],
+  opts: { anonymous: boolean; quiz: boolean; correctOption?: number } = {
+    anonymous: true,
+    quiz: false,
+  },
+): Promise<void> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  const answers = options.map(
+    (opt, i) =>
+      new Api.PollAnswer({
+        text: new Api.TextWithEntities({ text: opt, entities: [] }),
+        option: Buffer.from([i]),
+      }),
+  );
+  const poll = new Api.Poll({
+    id: generateRandomLong(),
+    question: new Api.TextWithEntities({ text: question, entities: [] }),
+    answers,
+    quiz: opts.quiz || undefined,
+    // Polls are anonymous by default; publicVoters makes votes visible.
+    publicVoters: opts.anonymous ? undefined : true,
+  });
+  const correctAnswers =
+    opts.quiz && opts.correctOption != null ? [Buffer.from([opts.correctOption])] : undefined;
+  await client.invoke(
+    new Api.messages.SendMedia({
+      peer,
+      media: new Api.InputMediaPoll({ poll, correctAnswers }),
+      message: "",
+      randomId: generateRandomLong(),
+    }),
+  );
 }

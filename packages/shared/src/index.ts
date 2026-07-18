@@ -17,6 +17,10 @@ export interface ChatDTO {
   hasPhoto: boolean;
   /** Whether the logged-in user is allowed to send messages here (false for read-only channels). */
   canPost: boolean;
+  /** Whether this chat is a bot. */
+  isBot: boolean;
+  /** Public @username, if any (used for deep links). */
+  username?: string;
 }
 
 export type MediaType =
@@ -26,6 +30,9 @@ export type MediaType =
   | "voice"
   | "document"
   | "sticker"
+  | "location"
+  | "poll"
+  | "contact"
   | "other";
 
 export interface MediaMeta {
@@ -39,6 +46,24 @@ export interface MediaMeta {
   duration?: number;
   /** True when a small thumbnail is available for inline preview. */
   hasThumb: boolean;
+  /** Location messages. */
+  lat?: number;
+  long?: number;
+  /** Poll messages. */
+  question?: string;
+  options?: string[];
+  /** Contact messages. */
+  phone?: string;
+}
+
+export type ButtonKind = "callback" | "url" | "text" | "other";
+
+export interface MessageButton {
+  text: string;
+  kind: ButtonKind;
+  url?: string;
+  /** base64-encoded callback data (for callback buttons). */
+  data?: string;
 }
 
 export interface MessageDTO {
@@ -54,6 +79,20 @@ export interface MessageDTO {
   media: MediaMeta | null;
   /** True for Telegram service messages (joins, title changes, pins, …); `text` holds a summary. */
   service: boolean;
+  /** Present for phone/video call service messages. */
+  call?: {
+    video: boolean;
+    missed: boolean;
+    duration?: number;
+  };
+  /** Inline/reply keyboard buttons attached to the message (bots). */
+  buttons?: MessageButton[][];
+}
+
+export interface BotCallbackResponse {
+  text?: string;
+  alert: boolean;
+  url?: string;
 }
 
 export interface MeDTO {
@@ -166,6 +205,37 @@ export interface ChatInfoDTO {
 }
 
 export type SharedMediaType = "media" | "file" | "link" | "music" | "voice" | "gif";
+
+/* ------------------------------------------------------------------ */
+/* Attachments + bots                                                  */
+/* ------------------------------------------------------------------ */
+
+export type AttachmentKind = "photo" | "video" | "file" | "music" | "voice";
+
+export interface SendLocationRequest {
+  lat: number;
+  long: number;
+}
+
+export interface SendPollRequest {
+  question: string;
+  options: string[];
+  /** Anonymous voting (default true). When false, voters are public. */
+  anonymous?: boolean;
+  /** Quiz mode — exactly one correct answer. */
+  quiz?: boolean;
+  /** Index (within options) of the correct answer, for quiz mode. */
+  correctOption?: number;
+}
+
+export interface BotCommand {
+  command: string;
+  description: string;
+}
+
+export interface BotCommandsResponse {
+  commands: BotCommand[];
+}
 
 /* ------------------------------------------------------------------ */
 /* Auth payloads                                                       */

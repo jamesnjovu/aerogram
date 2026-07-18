@@ -5,7 +5,13 @@ import { createChat, addMembers } from "../../telegram/chats";
 import { listFolders } from "../../telegram/folders";
 import { listCalls } from "../../telegram/calls";
 import { listContacts } from "../../telegram/contacts";
-import { getChatInfo, setMute, leaveChat, searchSharedMedia } from "../../telegram/chatInfo";
+import {
+  getChatInfo,
+  setMute,
+  leaveChat,
+  searchSharedMedia,
+  getBotCommands,
+} from "../../telegram/chatInfo";
 import { requireAuth } from "../middleware/session";
 
 const createSchema = z.object({
@@ -82,5 +88,11 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     const limit = clamp(Number(q.limit ?? 30) || 30, 1, 100);
     const client = await clientManager.getClient(req.userId!);
     return searchSharedMedia(req.userId!, client, chatId, type, limit, offsetId);
+  });
+
+  app.get("/chats/:chatId/bot", { preHandler: requireAuth }, async (req) => {
+    const { chatId } = req.params as { chatId: string };
+    const client = await clientManager.getClient(req.userId!);
+    return { commands: await getBotCommands(req.userId!, client, chatId) };
   });
 }

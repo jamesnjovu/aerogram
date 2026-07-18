@@ -73,6 +73,20 @@ Open the frontend, log in with your phone number, enter the code Telegram sends 
 | `npm test` | Backend unit tests (Vitest) |
 | `npm run build` | Build the Next.js frontend for production |
 
+## Deploy with Docker
+
+```bash
+cp .env.docker.example .env      # fill in API_ID, API_HASH, secrets, and URLs
+docker compose up -d --build
+```
+
+- Web: <http://localhost:3000> · Backend: <http://localhost:4000>
+- Both containers run from one image; server data (SQLite) and the media cache live in named
+  volumes (`aerogram-data`, `aerogram-cache`).
+- **Production:** set `NEXT_PUBLIC_API_URL` (the public backend URL — baked into the web bundle at
+  build time) and `WEB_ORIGIN` (the public web URL) in `.env`, then rebuild. Put both services
+  behind TLS; the session cookie is marked `Secure` automatically when `WEB_ORIGIN` is `https`.
+
 ## Notes & limits
 
 - Each logged-in user holds one persistent MTProto connection on the server; idle connections are

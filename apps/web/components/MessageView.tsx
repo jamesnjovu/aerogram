@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { DialogsResponse, MessageDTO } from "@aerogram/shared";
 import { api, ApiError } from "@/lib/api";
@@ -117,26 +118,65 @@ export function MessageView({ chatId }: { chatId: string }) {
   function handleDelete(m: MessageDTO) {
     if (window.confirm("Delete this message?")) deleteMut.mutate(m.id);
   }
+  /**
+   * The web client can't place calls (no in-browser tgcalls). Hand off to the native
+   * Telegram app via a deep link so the call can actually be made there.
+   */
+  function handleCall() {
+    let link = "tg://";
+    if (chat?.username) link = `tg://resolve?domain=${chat.username}`;
+    else if (!chatId.startsWith("-")) link = `tg://user?id=${chatId}`;
+    flash("Opening the Telegram app to place the call…");
+    try {
+      window.location.href = link;
+    } catch {
+      /* scheme not handled */
+    }
+  }
 
   const isGroupish = chat?.type === "group" || chat?.type === "channel";
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-3 border-b border-white/10 bg-[#17212b] px-4 py-2.5">
-        <Avatar
-          chatId={chatId}
-          title={chat?.title ?? "Chat"}
-          hasPhoto={chat?.hasPhoto ?? false}
-          size={40}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{chat?.title ?? "Chat"}</p>
-          <p className="truncate text-xs text-slate-400">{chat ? chatTypeLabel(chat.type) : ""}</p>
-        </div>
+      <header className="flex items-center gap-2 border-b border-white/10 bg-[#17212b] px-3 py-2.5">
+        <Link
+          href={`/chat/${encodeURIComponent(chatId)}/info`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 transition hover:bg-white/5"
+          title="Chat info"
+        >
+          <Avatar
+            chatId={chatId}
+            title={chat?.title ?? "Chat"}
+            hasPhoto={chat?.hasPhoto ?? false}
+            size={40}
+          />
+          <div className="min-w-0">
+            <p className="truncate font-medium">{chat?.title ?? "Chat"}</p>
+            <p className="truncate text-xs text-slate-400">
+              {chat ? chatTypeLabel(chat.type) : ""}
+            </p>
+          </div>
+        </Link>
+        <button
+          onClick={handleCall}
+          title="Audio call (opens Telegram app)"
+          aria-label="Audio call"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg hover:bg-white/10"
+        >
+          📞
+        </button>
+        <button
+          onClick={handleCall}
+          title="Video call (opens Telegram app)"
+          aria-label="Video call"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg hover:bg-white/10"
+        >
+          📹
+        </button>
         {isGroupish && (
           <button
             onClick={() => setAddOpen(true)}
-            className="rounded-lg px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-500/10"
+            className="shrink-0 rounded-lg px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-500/10"
           >
             ＋ Add
           </button>
@@ -169,6 +209,8 @@ export function MessageView({ chatId }: { chatId: string }) {
             onForward={setForwarding}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onCall={handleCall}
+            onNotice={flash}
           />
         ))}
         <div ref={bottomRef} />
@@ -189,6 +231,7 @@ export function MessageView({ chatId }: { chatId: string }) {
           chatId={chatId}
           replyTo={replyTo}
           editing={editing}
+          isBot={chat?.isBot}
           onClearReply={() => setReplyTo(null)}
           onClearEdit={() => setEditing(null)}
           onSent={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}

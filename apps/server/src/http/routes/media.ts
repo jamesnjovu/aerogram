@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { clientManager } from "../../telegram/clientManager";
-import { downloadForMessage, downloadAvatar } from "../../telegram/media";
+import { downloadForMessage, downloadAvatar, streamMedia } from "../../telegram/media";
 import { requireAuth } from "../middleware/session";
 
 export async function mediaRoutes(app: FastifyInstance): Promise<void> {
@@ -24,6 +24,25 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
     if (!Number.isFinite(id)) return reply.code(400).send({ error: "bad message id" });
 
     const client = await clientManager.getClient(req.userId!);
+
+    // Full media streams directly from Telegram (documents/video); thumbs stay buffered.
+    if (q.thumb !== "1") {
+      const streamed = await streamMedia(req.userId!, client, chatId, id);
+      if (streamed) {
+        reply
+          .header("Content-Type", streamed.contentType)
+          .header("Cache-Control", "private, max-age=86400");
+        if (streamed.size) reply.header("Content-Length", String(streamed.size));
+        if (q.download === "1") {
+          reply.header(
+            "Content-Disposition",
+            `attachment; filename="${streamed.fileName.replace(/"/g, "")}"`,
+          );
+        }
+        return reply.send(streamed.stream);
+      }
+    }
+
     const res = await downloadForMessage(req.userId!, client, chatId, id, q.thumb === "1");
     if (!res) return reply.code(404).send({ error: "no media" });
 

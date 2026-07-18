@@ -1,6 +1,9 @@
 import type {
+  AttachmentKind,
   AuthResult,
   Birthday,
+  BotCallbackResponse,
+  BotCommandsResponse,
   CallDTO,
   ChatInfoDTO,
   ContactDTO,
@@ -147,7 +150,77 @@ export const api = {
       `/messages/${encodeURIComponent(chatId)}/${messageId}/edit`,
       { method: "POST", body: JSON.stringify({ text }) },
     ),
+
+  /* ----------------------------- chat details --------------------------- */
+  chatInfo: (chatId: string) =>
+    request<ChatInfoDTO>(`/chats/${encodeURIComponent(chatId)}/info`),
+
+  muteChat: (chatId: string, muted: boolean) =>
+    request<{ ok: true }>(`/chats/${encodeURIComponent(chatId)}/mute`, {
+      method: "POST",
+      body: JSON.stringify({ muted }),
+    }),
+
+  leaveChat: (chatId: string) =>
+    request<{ ok: true }>(`/chats/${encodeURIComponent(chatId)}/leave`, { method: "POST" }),
+
+  sharedMedia: (chatId: string, type: SharedMediaType, offsetId = 0) =>
+    request<MessagesResponse>(
+      `/chats/${encodeURIComponent(chatId)}/media?type=${type}&offsetId=${offsetId}`,
+    ),
+
+  /* ----------------------------- attachments ---------------------------- */
+  sendAttachment: (chatId: string, kind: AttachmentKind, file: File, caption?: string) =>
+    uploadAttachment(chatId, kind, file, caption),
+
+  sendLocation: (chatId: string, lat: number, long: number) =>
+    request<{ ok: true }>(`/messages/${encodeURIComponent(chatId)}/location`, {
+      method: "POST",
+      body: JSON.stringify({ lat, long }),
+    }),
+
+  sendPoll: (
+    chatId: string,
+    question: string,
+    options: string[],
+    opts?: { anonymous?: boolean; quiz?: boolean; correctOption?: number },
+  ) =>
+    request<{ ok: true }>(`/messages/${encodeURIComponent(chatId)}/poll`, {
+      method: "POST",
+      body: JSON.stringify({ question, options, ...opts }),
+    }),
+
+  botCommands: (chatId: string) =>
+    request<BotCommandsResponse>(`/chats/${encodeURIComponent(chatId)}/bot`),
+
+  botCallback: (chatId: string, messageId: number, data: string) =>
+    request<BotCallbackResponse>(
+      `/messages/${encodeURIComponent(chatId)}/${messageId}/callback`,
+      { method: "POST", body: JSON.stringify({ data }) },
+    ),
 };
+
+/** Multipart attachment upload (kind + caption as query params). */
+async function uploadAttachment(
+  chatId: string,
+  kind: AttachmentKind,
+  file: File,
+  caption?: string,
+): Promise<{ ok: true }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const qs = new URLSearchParams({ kind });
+  if (caption) qs.set("caption", caption);
+  const res = await fetch(
+    `${API_URL}/messages/${encodeURIComponent(chatId)}/attach?${qs.toString()}`,
+    { method: "POST", credentials: "include", body: fd },
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(res.status, body.error ?? res.statusText, body);
+  }
+  return res.json() as Promise<{ ok: true }>;
+}
 
 /** Multipart upload for the profile photo (can't go through the JSON `request` helper). */
 async function uploadProfilePhoto(file: File): Promise<ProfileDTO> {

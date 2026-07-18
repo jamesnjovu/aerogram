@@ -4,18 +4,42 @@ import { useState } from "react";
 import type { MessageDTO } from "@aerogram/shared";
 import { mediaUrl } from "@/lib/api";
 import { fileSize } from "@/lib/format";
+import { useDownload } from "@/lib/download";
+import { Spinner } from "./Spinner";
 
-function DownloadButton({ href, className = "" }: { href: string; className?: string }) {
+/** Corner download button with progress (fetches + saves the file). */
+function DownloadButton({
+  url,
+  filename,
+  className = "",
+}: {
+  url: string;
+  filename: string;
+  className?: string;
+}) {
+  const { progress, start } = useDownload();
+  const active = progress !== null;
   return (
-    <a
-      href={href}
-      onClick={(e) => e.stopPropagation()}
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!active) void start(url, filename);
+      }}
       title="Download"
       aria-label="Download"
-      className={`flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-sm text-white backdrop-blur transition hover:bg-black/80 ${className}`}
+      className={`flex h-8 min-w-8 items-center justify-center rounded-full bg-black/55 px-1 text-sm text-white backdrop-blur transition hover:bg-black/80 ${className}`}
     >
-      ⬇
-    </a>
+      {active ? (
+        progress >= 0 ? (
+          <span className="text-[10px] tabular-nums">{progress}%</span>
+        ) : (
+          <Spinner size={14} />
+        )
+      ) : (
+        "⬇"
+      )}
+    </button>
   );
 }
 
@@ -29,6 +53,9 @@ function durationLabel(seconds?: number): string {
 export function MediaAttachment({ chatId, message }: { chatId: string; message: MessageDTO }) {
   const media = message.media;
   const [playing, setPlaying] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const fileDl = useDownload();
   if (!media) return null;
 
   const full = mediaUrl(chatId, message.id, {});
@@ -39,18 +66,29 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
   /* -------------------------------- Photo -------------------------------- */
   if (media.type === "photo") {
     return (
-      <div className="group relative mb-1 w-fit max-w-full">
+      <div
+        className={`group relative mb-1 w-fit max-w-full ${imgLoaded ? "" : "min-h-[140px] min-w-[140px]"}`}
+      >
         <a href={full} target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={full}
             alt="photo"
             loading="lazy"
-            className="max-h-80 max-w-full rounded-lg object-cover"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgLoaded(true)}
+            className={`block max-h-80 max-w-full rounded-lg object-cover transition-opacity ${
+              imgLoaded ? "opacity-100" : "opacity-0"
+            }`}
             style={{ aspectRatio: aspect }}
           />
         </a>
-        <DownloadButton href={download} className="absolute right-2 top-2" />
+        {!imgLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-800/50">
+            <Spinner />
+          </div>
+        )}
+        <DownloadButton url={download} filename={media.fileName ?? "photo.jpg"} className="absolute right-2 top-2" />
       </div>
     );
   }
@@ -64,10 +102,18 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
             src={full}
             controls
             autoPlay
+            onLoadedData={() => setVideoReady(true)}
+            onPlaying={() => setVideoReady(true)}
+            onWaiting={() => setVideoReady(false)}
             className="max-h-80 max-w-full rounded-lg bg-black"
             style={{ aspectRatio: aspect }}
           />
-          <DownloadButton href={download} className="absolute right-2 top-2" />
+          {!videoReady && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <Spinner size={28} />
+            </div>
+          )}
+          <DownloadButton url={download} filename={media.fileName ?? "video.mp4"} className="absolute right-2 top-2" />
         </div>
       );
     }
@@ -83,10 +129,17 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
             src={thumb}
             alt="video"
             loading="lazy"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgLoaded(true)}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-4xl">🎬</div>
+        )}
+        {media.hasThumb && !imgLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <Spinner />
+          </div>
         )}
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/55 text-3xl text-white transition group-hover:bg-black/70">
@@ -98,7 +151,7 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
             {durationLabel(media.duration)}
           </span>
         ) : null}
-        <DownloadButton href={download} className="absolute right-2 top-2" />
+        <DownloadButton url={download} filename={media.fileName ?? "video.mp4"} className="absolute right-2 top-2" />
       </div>
     );
   }
@@ -119,21 +172,86 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
     );
   }
 
+  /* ------------------------------- Location ------------------------------ */
+  if (media.type === "location" && media.lat != null && media.long != null) {
+    const url = `https://www.openstreetmap.org/?mlat=${media.lat}&mlon=${media.long}#map=15/${media.lat}/${media.long}`;
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-1 flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2 transition hover:bg-black/30"
+      >
+        <span className="text-xl">📍</span>
+        <span className="min-w-0">
+          <span className="block text-sm">Location</span>
+          <span className="block truncate text-xs text-slate-400">
+            {media.lat.toFixed(5)}, {media.long.toFixed(5)}
+          </span>
+        </span>
+      </a>
+    );
+  }
+
+  /* --------------------------------- Poll -------------------------------- */
+  if (media.type === "poll") {
+    return (
+      <div className="mb-1 rounded-lg bg-black/20 p-3">
+        <p className="mb-1 text-xs text-slate-400">📊 Poll</p>
+        <p className="mb-2 font-medium">{media.question}</p>
+        <ul className="space-y-1">
+          {media.options?.map((o, i) => (
+            <li key={i} className="rounded-md border border-white/10 px-2 py-1 text-sm">
+              {o}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  /* ------------------------------- Contact ------------------------------- */
+  if (media.type === "contact") {
+    return (
+      <div className="mb-1 flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2">
+        <span className="text-xl">👤</span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm">{media.fileName}</span>
+          <span className="block truncate text-xs text-slate-400">{media.phone ?? ""}</span>
+        </span>
+      </div>
+    );
+  }
+
   /* --------------------------- File / audio / voice ---------------------- */
+  const active = fileDl.progress !== null;
+  const label =
+    active && fileDl.progress! >= 0
+      ? `Downloading ${fileDl.progress}%`
+      : active
+        ? "Preparing…"
+        : [media.mimeType, fileSize(media.size)].filter(Boolean).join(" · ");
   return (
-    <a
-      href={download}
-      className="mb-1 flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2 transition hover:bg-black/30"
+    <button
+      onClick={() => !active && void fileDl.start(download, media.fileName ?? "file")}
+      className="mb-1 flex w-full items-center gap-3 rounded-lg bg-black/20 px-3 py-2 text-left transition hover:bg-black/30 disabled:opacity-80"
+      disabled={active}
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500/80 text-lg">
-        ⬇
+        {active ? <Spinner size={18} /> : "⬇"}
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block truncate text-sm">{media.fileName ?? media.type}</span>
-        <span className="block text-xs text-slate-400">
-          {[media.mimeType, fileSize(media.size)].filter(Boolean).join(" · ")}
-        </span>
+        <span className="block text-xs text-slate-400">{label}</span>
+        {active && fileDl.progress! >= 0 && (
+          <span className="mt-1 block h-1 w-full overflow-hidden rounded bg-white/10">
+            <span
+              className="block h-full bg-sky-400 transition-all"
+              style={{ width: `${fileDl.progress}%` }}
+            />
+          </span>
+        )}
       </span>
-    </a>
+    </button>
   );
 }
