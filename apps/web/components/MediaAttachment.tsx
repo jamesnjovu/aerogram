@@ -5,7 +5,10 @@ import type { MessageDTO } from "@aerogram/shared";
 import { mediaUrl } from "@/lib/api";
 import { fileSize } from "@/lib/format";
 import { useDownload } from "@/lib/download";
+import { FALLBACK_VIDEO_ASPECT, ratio } from "@/lib/media";
 import { Spinner } from "./Spinner";
+import { VideoPlayer } from "./VideoPlayer";
+import { MediaLightbox } from "./MediaLightbox";
 
 /** Corner download button with progress (fetches + saves the file). */
 function DownloadButton({
@@ -43,6 +46,20 @@ function DownloadButton({
   );
 }
 
+/** Corner button that opens the media in the fullscreen viewer. */
+function ExpandButton({ onClick }: { onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Fullscreen"
+      aria-label="Fullscreen"
+      className="flex h-8 min-w-8 items-center justify-center rounded-full bg-black/55 px-1 text-sm text-white backdrop-blur transition hover:bg-black/80"
+    >
+      ⛶
+    </button>
+  );
+}
+
 function durationLabel(seconds?: number): string {
   if (!seconds && seconds !== 0) return "";
   const m = Math.floor(seconds / 60);
@@ -54,14 +71,17 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
   const media = message.media;
   const [playing, setPlaying] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  // Learned shape for videos Telegram sent without dimensions: the thumbnail matches the
+  // video's aspect, so the card is already correct by the time you hit play.
+  const [learnedAspect, setLearnedAspect] = useState<string>();
   const fileDl = useDownload();
   if (!media) return null;
 
   const full = mediaUrl(chatId, message.id, {});
   const thumb = mediaUrl(chatId, message.id, { thumb: true });
   const download = mediaUrl(chatId, message.id, { download: true });
-  const aspect = media.width && media.height ? `${media.width} / ${media.height}` : undefined;
+  const aspect = ratio(media.width, media.height) ?? learnedAspect;
 
   /* -------------------------------- Photo -------------------------------- */
   if (media.type === "photo") {
@@ -69,7 +89,7 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
       <div
         className={`group relative mb-1 w-fit max-w-full ${imgLoaded ? "" : "min-h-[140px] min-w-[140px]"}`}
       >
-        <a href={full} target="_blank" rel="noreferrer">
+        <button type="button" onClick={() => setExpanded(true)} className="block" title="Open">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={full}
@@ -82,77 +102,114 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
             }`}
             style={{ aspectRatio: aspect }}
           />
-        </a>
+        </button>
         {!imgLoaded && (
           <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-800/50">
             <Spinner />
           </div>
         )}
         <DownloadButton url={download} filename={media.fileName ?? "photo.jpg"} className="absolute right-2 top-2" />
+        {expanded && (
+          <MediaLightbox
+            item={{ kind: "photo", src: full, title: media.fileName }}
+            onClose={() => setExpanded(false)}
+          />
+        )}
       </div>
     );
   }
 
   /* -------------------------------- Video -------------------------------- */
   if (media.type === "video") {
+    const box = "relative mb-1 w-full max-w-sm overflow-hidden rounded-lg";
+    const boxStyle = { aspectRatio: aspect ?? FALLBACK_VIDEO_ASPECT, maxHeight: "24rem" };
+    const lightbox = expanded && (
+      <MediaLightbox
+        item={{
+          kind: "video",
+          src: full,
+          poster: media.hasThumb ? thumb : undefined,
+          aspect,
+          title: media.fileName,
+        }}
+        onClose={() => setExpanded(false)}
+      />
+    );
+    // The player mounts inside the very same box as the poster, so the card keeps its shape.
     if (playing) {
       return (
-        <div className="relative mb-1 w-fit max-w-full">
-          <video
-            src={full}
-            controls
-            autoPlay
-            onLoadedData={() => setVideoReady(true)}
-            onPlaying={() => setVideoReady(true)}
-            onWaiting={() => setVideoReady(false)}
-            className="max-h-80 max-w-full rounded-lg bg-black"
-            style={{ aspectRatio: aspect }}
-          />
-          {!videoReady && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <Spinner size={28} />
+        <>
+          <div className={`${box} bg-black`} style={boxStyle}>
+            <VideoPlayer
+              src={full}
+              poster={media.hasThumb ? thumb : undefined}
+              onAspect={setLearnedAspect}
+            />
+            <div className="absolute right-2 top-2 flex gap-1.5">
+              <ExpandButton
+                onClick={() => {
+                  setPlaying(false); // avoid two copies playing at once
+                  setExpanded(true);
+                }}
+              />
+              <DownloadButton url={download} filename={media.fileName ?? "video.mp4"} />
             </div>
-          )}
-          <DownloadButton url={download} filename={media.fileName ?? "video.mp4"} className="absolute right-2 top-2" />
-        </div>
+          </div>
+          {lightbox}
+        </>
       );
     }
     return (
-      <div
-        className="group relative mb-1 w-full max-w-sm cursor-pointer overflow-hidden rounded-lg bg-black/40"
-        style={{ aspectRatio: aspect ?? "16 / 9", maxHeight: "24rem" }}
-        onClick={() => setPlaying(true)}
-      >
-        {media.hasThumb ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={thumb}
-            alt="video"
-            loading="lazy"
-            onLoad={() => setImgLoaded(true)}
-            onError={() => setImgLoaded(true)}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-4xl">🎬</div>
-        )}
-        {media.hasThumb && !imgLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-            <Spinner />
+      <>
+        <div
+          className={`group cursor-pointer bg-black/40 ${box}`}
+          style={boxStyle}
+          onClick={() => setPlaying(true)}
+        >
+          {media.hasThumb ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumb}
+              alt="video"
+              loading="lazy"
+              onLoad={(e) => {
+                setImgLoaded(true);
+                const r = ratio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+                if (r) setLearnedAspect(r);
+              }}
+              onError={() => setImgLoaded(true)}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-4xl">🎬</div>
+          )}
+          {media.hasThumb && !imgLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <Spinner />
+            </div>
+          )}
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/55 text-3xl text-white transition group-hover:bg-black/70">
+              ▶
+            </span>
+          </span>
+          {media.duration ? (
+            <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
+              {durationLabel(media.duration)}
+            </span>
+          ) : null}
+          <div className="absolute right-2 top-2 flex gap-1.5">
+            <ExpandButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded(true);
+              }}
+            />
+            <DownloadButton url={download} filename={media.fileName ?? "video.mp4"} />
           </div>
-        )}
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/55 text-3xl text-white transition group-hover:bg-black/70">
-            ▶
-          </span>
-        </span>
-        {media.duration ? (
-          <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">
-            {durationLabel(media.duration)}
-          </span>
-        ) : null}
-        <DownloadButton url={download} filename={media.fileName ?? "video.mp4"} className="absolute right-2 top-2" />
-      </div>
+        </div>
+        {lightbox}
+      </>
     );
   }
 

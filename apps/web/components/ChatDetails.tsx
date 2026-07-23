@@ -4,10 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { SharedMediaType } from "@aerogram/shared";
+import type { MessageDTO, SharedMediaType } from "@aerogram/shared";
 import { api, mediaUrl } from "@/lib/api";
 import { Avatar } from "./Avatar";
-import { chatTypeLabel } from "@/lib/format";
+import { VideoPlayer } from "./VideoPlayer";
+import { MediaLightbox } from "./MediaLightbox";
+import { chatTypeLabel, formatDuration } from "@/lib/format";
+import { ratio } from "@/lib/media";
 
 const TABS: { key: SharedMediaType; label: string }[] = [
   { key: "media", label: "Media" },
@@ -162,6 +165,121 @@ export function ChatDetails({ chatId }: { chatId: string }) {
   );
 }
 
+const TILE_BOX = "relative aspect-square overflow-hidden rounded bg-black/30";
+const TILE_ICON =
+  "absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full " +
+  "bg-black/60 text-xs text-white backdrop-blur transition hover:bg-black/85";
+
+/** Grid tile that swaps its poster for an in-app player, keeping the tile's shape. */
+function VideoTile({ chatId, message }: { chatId: string; message: MessageDTO }) {
+  const [playing, setPlaying] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [aspect, setAspect] = useState(ratio(message.media?.width, message.media?.height));
+  const src = mediaUrl(chatId, message.id);
+  const poster = mediaUrl(chatId, message.id, { thumb: true });
+
+  const lightbox = expanded && (
+    <MediaLightbox
+      item={{ kind: "video", src, poster, aspect, title: message.media?.fileName }}
+      onClose={() => setExpanded(false)}
+    />
+  );
+
+  if (playing) {
+    return (
+      <>
+        <div className={TILE_BOX}>
+          <VideoPlayer src={src} poster={poster} onAspect={setAspect} />
+          <button
+            onClick={() => {
+              setPlaying(false); // avoid two copies playing at once
+              setExpanded(true);
+            }}
+            className={TILE_ICON}
+            title="Fullscreen"
+            aria-label="Fullscreen"
+          >
+            ⛶
+          </button>
+        </div>
+        {lightbox}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className={`group ${TILE_BOX}`}>
+        <button
+          type="button"
+          onClick={() => setPlaying(true)}
+          className="absolute inset-0 h-full w-full"
+          aria-label="Play video"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={poster}
+            alt=""
+            loading="lazy"
+            onLoad={(e) => {
+              const r = ratio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+              if (r) setAspect((a) => a ?? r);
+            }}
+            className="h-full w-full object-cover"
+          />
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-lg text-white transition group-hover:bg-black/75">
+              ▶
+            </span>
+          </span>
+        </button>
+        {message.media?.duration ? (
+          <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] text-white">
+            {formatDuration(message.media.duration)}
+          </span>
+        ) : null}
+        <button
+          onClick={() => setExpanded(true)}
+          className={`${TILE_ICON} opacity-0 group-hover:opacity-100 focus-visible:opacity-100`}
+          title="Fullscreen"
+          aria-label="Fullscreen"
+        >
+          ⛶
+        </button>
+      </div>
+      {lightbox}
+    </>
+  );
+}
+
+/** Photo tile — opens in the in-app viewer instead of a raw browser tab. */
+function PhotoTile({ chatId, message }: { chatId: string; message: MessageDTO }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setExpanded(true)} className={TILE_BOX}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={mediaUrl(chatId, message.id, { thumb: true })}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      </button>
+      {expanded && (
+        <MediaLightbox
+          item={{
+            kind: "photo",
+            src: mediaUrl(chatId, message.id),
+            title: message.media?.fileName,
+          }}
+          onClose={() => setExpanded(false)}
+        />
+      )}
+    </>
+  );
+}
+
 function SharedMedia({ chatId, type }: { chatId: string; type: SharedMediaType }) {
   const q = useInfiniteQuery({
     queryKey: ["sharedMedia", chatId, type],
@@ -182,28 +300,13 @@ function SharedMedia({ chatId, type }: { chatId: string; type: SharedMediaType }
     <div className="py-3">
       {isGrid ? (
         <div className="grid grid-cols-3 gap-1">
-          {items.map((m) => (
-            <a
-              key={m.id}
-              href={mediaUrl(chatId, m.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="relative aspect-square overflow-hidden rounded bg-black/30"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={mediaUrl(chatId, m.id, { thumb: true })}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-              {m.media?.type === "video" && (
-                <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] text-white">
-                  ▶
-                </span>
-              )}
-            </a>
-          ))}
+          {items.map((m) =>
+            m.media?.type === "video" ? (
+              <VideoTile key={m.id} chatId={chatId} message={m} />
+            ) : (
+              <PhotoTile key={m.id} chatId={chatId} message={m} />
+            ),
+          )}
         </div>
       ) : (
         <div className="space-y-1">
