@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Readable } from "node:stream";
+import bigInt from "big-integer";
 import { type TelegramClient } from "telegram";
 import { config } from "../config";
 import { normalizeMediaMeta } from "./normalize";
 import { getMessageById } from "./messages";
 import { resolveInputPeer } from "./entityCache";
+import { sliceByteRange, type ByteRange } from "../http/range";
 
 const cacheRoot = resolve(config.MEDIA_CACHE_DIR);
 mkdirSync(cacheRoot, { recursive: true });
@@ -94,11 +96,18 @@ export async function downloadForMessage(
   const msg = await getMessageById(userId, client, chatId, messageId);
   if (!msg || !(msg as { media?: unknown }).media) return null;
 
-  const data = await client.downloadMedia(
-    msg,
-    thumb ? { thumb: pickLargestThumb(msg) as never } : {},
-  );
-  const buffer = toBuffer(data);
+  const data = await client
+    .downloadMedia(msg, thumb ? { thumb: pickLargestThumb(msg) as never } : {})
+    .catch(() => null);
+  let buffer = toBuffer(data);
+
+  // Not every photo carries a thumbnail Telegram will serve. Rather than 404 — which shows
+  // up as an empty tile — fall back to the full image, which is what the viewer loads anyway.
+  // Documents are left alone: falling back there would mean buffering an entire video.
+  const isPhoto = (msg as { media?: { className?: string } }).media?.className === "MessageMediaPhoto";
+  if (!buffer && thumb && isPhoto) {
+    buffer = toBuffer(await client.downloadMedia(msg, {}).catch(() => null));
+  }
   if (!buffer) return null;
 
   const result: DownloadResult = { buffer, ...describe(msg, thumb) };
@@ -111,27 +120,63 @@ export interface StreamResult {
   contentType: string;
   fileName: string;
   size?: number;
+  /** Inclusive byte range being served — set only when the caller asked for one. */
+  start?: number;
+  end?: number;
+  /** The requested range lies outside the file; the caller should answer 416. */
+  unsatisfiable?: boolean;
 }
+
+/**
+ * Telegram serves file chunks on aligned offsets only (and a chunk may not straddle a 1 MB
+ * boundary), so a range starting mid-chunk is fetched from the boundary below it and the
+ * extra head bytes are dropped here.
+ */
+const CHUNK = 512 * 1024;
 
 /**
  * Stream a document (video/audio/file) straight from Telegram to the client, chunk by chunk,
  * instead of buffering the whole file server-side first. Returns null for non-documents
  * (photos etc.), which fall back to the buffered path.
+ *
+ * With a `range`, only those bytes are streamed so the caller can answer 206 — media
+ * elements need that to seek, and Safari refuses to play without it.
  */
 export async function streamMedia(
   userId: number,
   client: TelegramClient,
   chatId: string,
   messageId: number,
+  range?: ByteRange | null,
 ): Promise<StreamResult | null> {
   const msg = await getMessageById(userId, client, chatId, messageId);
   const media = (msg as { media?: any })?.media;
   if (!media || media.className !== "MessageMediaDocument") return null;
 
   const { contentType, fileName } = describe(msg, false);
-  const meta = normalizeMediaMeta(media);
-  const iter = (client as any).iterDownload({ file: media, requestSize: 512 * 1024 });
-  return { stream: Readable.from(iter), contentType, fileName, size: meta?.size };
+  const size = normalizeMediaMeta(media)?.size;
+
+  // No range asked for — or no known size to resolve it against — so serve the whole file.
+  if (!range || !size) {
+    const iter = (client as any).iterDownload({ file: media, requestSize: CHUNK });
+    return { stream: Readable.from(iter), contentType, fileName, size };
+  }
+
+  const last = size - 1;
+  const start = range.suffix !== undefined ? Math.max(0, size - range.suffix) : (range.start ?? 0);
+  const end = range.suffix !== undefined ? last : Math.min(range.end ?? last, last);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > last || end < start) {
+    return { stream: Readable.from([]), contentType, fileName, size, unsatisfiable: true };
+  }
+
+  const alignedStart = start - (start % CHUNK);
+  const iter = (client as any).iterDownload({
+    file: media,
+    offset: bigInt(alignedStart),
+    requestSize: CHUNK,
+  });
+  const stream = Readable.from(sliceByteRange(iter, start - alignedStart, end - start + 1));
+  return { stream, contentType, fileName, size, start, end };
 }
 
 /** Download (and cache) a chat's profile photo (small size). */

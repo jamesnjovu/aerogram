@@ -5,7 +5,7 @@ import type { MessageDTO } from "@aerogram/shared";
 import { mediaUrl } from "@/lib/api";
 import { fileSize } from "@/lib/format";
 import { useDownload } from "@/lib/download";
-import { FALLBACK_VIDEO_ASPECT, ratio } from "@/lib/media";
+import { cardWidth, FALLBACK_VIDEO_ASPECT, ratio } from "@/lib/media";
 import { Spinner } from "./Spinner";
 import { VideoPlayer } from "./VideoPlayer";
 import { MediaLightbox } from "./MediaLightbox";
@@ -121,8 +121,12 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
 
   /* -------------------------------- Video -------------------------------- */
   if (media.type === "video") {
-    const box = "relative mb-1 w-full max-w-sm overflow-hidden rounded-lg";
-    const boxStyle = { aspectRatio: aspect ?? FALLBACK_VIDEO_ASPECT, maxHeight: "24rem" };
+    const box = "relative mb-1 overflow-hidden rounded-lg";
+    const boxStyle = {
+      width: cardWidth(aspect),
+      maxWidth: "100%",
+      aspectRatio: aspect ?? FALLBACK_VIDEO_ASPECT,
+    };
     const lightbox = expanded && (
       <MediaLightbox
         item={{
@@ -130,6 +134,7 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
           src: full,
           poster: media.hasThumb ? thumb : undefined,
           aspect,
+          silent: media.silent,
           title: media.fileName,
         }}
         onClose={() => setExpanded(false)}
@@ -143,6 +148,7 @@ export function MediaAttachment({ chatId, message }: { chatId: string; message: 
             <VideoPlayer
               src={full}
               poster={media.hasThumb ? thumb : undefined}
+              silent={media.silent}
               onAspect={setLearnedAspect}
             />
             <div className="absolute right-2 top-2 flex gap-1.5">

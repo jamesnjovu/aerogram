@@ -35,6 +35,30 @@ export async function getHistory(
   return { messages: dtos, nextOffsetId };
 }
 
+/**
+ * Mark the chat read up to `maxId` (0 = everything), which is what clears its unread badge —
+ * for the account as a whole, not just this client. Channels use a different RPC than
+ * users/basic groups, so the peer kind decides.
+ */
+export async function markRead(
+  userId: number,
+  client: TelegramClient,
+  chatId: string,
+  maxId = 0,
+): Promise<void> {
+  const peer = await resolveInputPeer(userId, client, chatId);
+  if (peer instanceof Api.InputPeerChannel) {
+    await client.invoke(
+      new Api.channels.ReadHistory({
+        channel: new Api.InputChannel({ channelId: peer.channelId, accessHash: peer.accessHash }),
+        maxId,
+      }),
+    );
+    return;
+  }
+  await client.invoke(new Api.messages.ReadHistory({ peer, maxId }));
+}
+
 /** Send a text message; returns the created message normalized. */
 export async function sendText(
   userId: number,

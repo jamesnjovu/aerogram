@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { clientManager } from "../../telegram/clientManager";
 import { downloadForMessage, downloadAvatar, streamMedia } from "../../telegram/media";
+import { parseByteRange } from "../range";
 import { requireAuth } from "../middleware/session";
 
 export async function mediaRoutes(app: FastifyInstance): Promise<void> {
@@ -27,17 +28,33 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
 
     // Full media streams directly from Telegram (documents/video); thumbs stay buffered.
     if (q.thumb !== "1") {
-      const streamed = await streamMedia(req.userId!, client, chatId, id);
+      const range = parseByteRange(req.headers.range);
+      const streamed = await streamMedia(req.userId!, client, chatId, id, range);
       if (streamed) {
+        if (streamed.unsatisfiable) {
+          return reply
+            .code(416)
+            .header("Content-Range", `bytes */${streamed.size ?? 0}`)
+            .send({ error: "range not satisfiable" });
+        }
         reply
           .header("Content-Type", streamed.contentType)
-          .header("Cache-Control", "private, max-age=86400");
-        if (streamed.size) reply.header("Content-Length", String(streamed.size));
+          .header("Cache-Control", "private, max-age=86400")
+          .header("Accept-Ranges", "bytes");
         if (q.download === "1") {
           reply.header(
             "Content-Disposition",
             `attachment; filename="${streamed.fileName.replace(/"/g, "")}"`,
           );
+        }
+        // Players seek by asking for a range; answering 200 would hand them the wrong bytes.
+        if (streamed.start !== undefined && streamed.end !== undefined) {
+          reply
+            .code(206)
+            .header("Content-Range", `bytes ${streamed.start}-${streamed.end}/${streamed.size}`)
+            .header("Content-Length", String(streamed.end - streamed.start + 1));
+        } else if (streamed.size) {
+          reply.header("Content-Length", String(streamed.size));
         }
         return reply.send(streamed.stream);
       }

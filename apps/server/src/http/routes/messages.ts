@@ -3,6 +3,7 @@ import { z } from "zod";
 import { clientManager } from "../../telegram/clientManager";
 import {
   getHistory,
+  markRead,
   sendText,
   forwardMessages,
   deleteMessages,
@@ -24,6 +25,7 @@ const deleteSchema = z.object({ messageIds: z.array(z.number().int()).min(1).max
 const editSchema = z.object({ text: z.string().min(1).max(4096) });
 const attachKind = z.enum(["photo", "video", "file", "music", "voice"]);
 const callbackSchema = z.object({ data: z.string() });
+const readSchema = z.object({ maxId: z.number().int().nonnegative().optional() });
 const locationSchema = z.object({ lat: z.number(), long: z.number() });
 const pollSchema = z.object({
   question: z.string().min(1).max(255),
@@ -41,6 +43,15 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     const offsetId = Number(q.offsetId ?? 0) || 0;
     const client = await clientManager.getClient(req.userId!);
     return getHistory(req.userId!, client, chatId, limit, offsetId);
+  });
+
+  // Reading a chat clears its unread badge account-wide.
+  app.post("/messages/:chatId/read", { preHandler: requireAuth }, async (req) => {
+    const { chatId } = req.params as { chatId: string };
+    const { maxId } = readSchema.parse(req.body ?? {});
+    const client = await clientManager.getClient(req.userId!);
+    await markRead(req.userId!, client, chatId, maxId);
+    return { ok: true };
   });
 
   app.post("/messages/:chatId", { preHandler: requireAuth }, async (req) => {

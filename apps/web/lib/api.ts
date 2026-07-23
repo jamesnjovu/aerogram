@@ -10,8 +10,11 @@ import type {
   CreateChatResponse,
   DialogsResponse,
   FolderDTO,
+  InviteInfoResponse,
+  JoinInviteResponse,
   MessagesResponse,
   ProfileDTO,
+  ResolveChatResponse,
   SendMessageResponse,
   SessionResponse,
   SendCodeResponse,
@@ -79,6 +82,13 @@ export const api = {
     request<MessagesResponse>(
       `/messages/${encodeURIComponent(chatId)}?limit=${limit}&offsetId=${offsetId}`,
     ),
+
+  /** Mark a chat read up to `maxId`, clearing its unread badge. */
+  markRead: (chatId: string, maxId?: number) =>
+    request<{ ok: true }>(`/messages/${encodeURIComponent(chatId)}/read`, {
+      method: "POST",
+      body: JSON.stringify({ maxId }),
+    }),
 
   send: (chatId: string, text: string, replyToId?: number) =>
     request<SendMessageResponse>(`/messages/${encodeURIComponent(chatId)}`, {
@@ -163,6 +173,26 @@ export const api = {
 
   leaveChat: (chatId: string) =>
     request<{ ok: true }>(`/chats/${encodeURIComponent(chatId)}/leave`, { method: "POST" }),
+
+  /** Resolve a public @username (from a t.me link or a mention) to a chat we can open. */
+  resolveChat: (username: string) =>
+    request<ResolveChatResponse>("/chats/resolve", {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    }),
+
+  /** What a t.me/+hash invite points at. Read-only — joining is a separate call. */
+  inviteInfo: (hash: string) =>
+    request<InviteInfoResponse>("/chats/invite", {
+      method: "POST",
+      body: JSON.stringify({ hash }),
+    }),
+
+  joinInvite: (hash: string) =>
+    request<JoinInviteResponse>("/chats/invite/join", {
+      method: "POST",
+      body: JSON.stringify({ hash }),
+    }),
 
   sharedMedia: (chatId: string, type: SharedMediaType, offsetId = 0) =>
     request<MessagesResponse>(

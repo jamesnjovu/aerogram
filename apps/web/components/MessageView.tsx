@@ -60,6 +60,32 @@ export function MessageView({ chatId }: { chatId: string }) {
     }
   }, [messages.length]);
 
+  // Having the chat open means its messages are read: tell Telegram, and drop the unread
+  // badge locally so the list doesn't keep showing a count for what's on screen. Re-runs
+  // whenever a newer message arrives while the chat stays open.
+  const newestId = messages.length ? messages[messages.length - 1].id : 0;
+  const markedUpTo = useRef(0);
+  useEffect(() => {
+    markedUpTo.current = 0; // switching chats resets the watermark
+  }, [chatId]);
+  useEffect(() => {
+    if (!newestId || newestId <= markedUpTo.current) return;
+    markedUpTo.current = newestId;
+    api
+      .markRead(chatId, newestId)
+      .then(() => {
+        qc.setQueriesData<DialogsResponse>({ queryKey: ["dialogs"] }, (old) =>
+          old
+            ? { ...old, chats: old.chats.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c)) }
+            : old,
+        );
+        qc.invalidateQueries({ queryKey: ["dialogs"] });
+      })
+      .catch(() => {
+        markedUpTo.current = 0; // let a later render retry
+      });
+  }, [chatId, newestId, qc]);
+
   function onScroll() {
     const el = scrollRef.current;
     if (!el) return;

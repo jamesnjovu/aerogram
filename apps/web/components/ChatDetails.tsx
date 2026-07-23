@@ -9,6 +9,7 @@ import { api, mediaUrl } from "@/lib/api";
 import { Avatar } from "./Avatar";
 import { VideoPlayer } from "./VideoPlayer";
 import { MediaLightbox } from "./MediaLightbox";
+import { RichText } from "./RichText";
 import { chatTypeLabel, formatDuration } from "@/lib/format";
 import { ratio } from "@/lib/media";
 
@@ -174,13 +175,22 @@ const TILE_ICON =
 function VideoTile({ chatId, message }: { chatId: string; message: MessageDTO }) {
   const [playing, setPlaying] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [posterBroken, setPosterBroken] = useState(false);
   const [aspect, setAspect] = useState(ratio(message.media?.width, message.media?.height));
   const src = mediaUrl(chatId, message.id);
-  const poster = mediaUrl(chatId, message.id, { thumb: true });
+  const hasPoster = Boolean(message.media?.hasThumb) && !posterBroken;
+  const poster = hasPoster ? mediaUrl(chatId, message.id, { thumb: true }) : undefined;
 
   const lightbox = expanded && (
     <MediaLightbox
-      item={{ kind: "video", src, poster, aspect, title: message.media?.fileName }}
+      item={{
+        kind: "video",
+        src,
+        poster,
+        aspect,
+        silent: message.media?.silent,
+        title: message.media?.fileName,
+      }}
       onClose={() => setExpanded(false)}
     />
   );
@@ -189,7 +199,7 @@ function VideoTile({ chatId, message }: { chatId: string; message: MessageDTO })
     return (
       <>
         <div className={TILE_BOX}>
-          <VideoPlayer src={src} poster={poster} onAspect={setAspect} />
+          <VideoPlayer src={src} poster={poster} silent={message.media?.silent} onAspect={setAspect} />
           <button
             onClick={() => {
               setPlaying(false); // avoid two copies playing at once
@@ -216,17 +226,22 @@ function VideoTile({ chatId, message }: { chatId: string; message: MessageDTO })
           className="absolute inset-0 h-full w-full"
           aria-label="Play video"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={poster}
-            alt=""
-            loading="lazy"
-            onLoad={(e) => {
-              const r = ratio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
-              if (r) setAspect((a) => a ?? r);
-            }}
-            className="h-full w-full object-cover"
-          />
+          {hasPoster ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={poster}
+              alt=""
+              loading="lazy"
+              onLoad={(e) => {
+                const r = ratio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+                if (r) setAspect((a) => a ?? r);
+              }}
+              onError={() => setPosterBroken(true)}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-2xl">🎬</span>
+          )}
           <span className="absolute inset-0 flex items-center justify-center">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-lg text-white transition group-hover:bg-black/75">
               ▶
@@ -255,24 +270,31 @@ function VideoTile({ chatId, message }: { chatId: string; message: MessageDTO })
 /** Photo tile — opens in the in-app viewer instead of a raw browser tab. */
 function PhotoTile({ chatId, message }: { chatId: string; message: MessageDTO }) {
   const [expanded, setExpanded] = useState(false);
+  const full = mediaUrl(chatId, message.id);
+  // Not every photo has a thumbnail Telegram will hand over; those tiles used to render
+  // blank even though the full image loads fine, so fall back to it.
+  const [src, setSrc] = useState(mediaUrl(chatId, message.id, { thumb: true }));
+  const [broken, setBroken] = useState(false);
+
   return (
     <>
       <button type="button" onClick={() => setExpanded(true)} className={TILE_BOX}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={mediaUrl(chatId, message.id, { thumb: true })}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
+        {broken ? (
+          <span className="flex h-full w-full items-center justify-center text-2xl">🖼</span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            onError={() => (src === full ? setBroken(true) : setSrc(full))}
+            className="h-full w-full object-cover"
+          />
+        )}
       </button>
       {expanded && (
         <MediaLightbox
-          item={{
-            kind: "photo",
-            src: mediaUrl(chatId, message.id),
-            title: message.media?.fileName,
-          }}
+          item={{ kind: "photo", src: full, title: message.media?.fileName }}
           onClose={() => setExpanded(false)}
         />
       )}
@@ -314,9 +336,9 @@ function SharedMedia({ chatId, type }: { chatId: string; type: SharedMediaType }
             type === "link" ? (
               <div
                 key={m.id}
-                className="break-words rounded-lg bg-[#17212b] px-3 py-2 text-sm text-sky-300"
+                className="whitespace-pre-wrap break-words rounded-lg bg-[#17212b] px-3 py-2 text-sm text-sky-300"
               >
-                {m.text || "(link)"}
+                {m.text ? <RichText text={m.text} entities={m.entities} /> : "(link)"}
               </div>
             ) : (
               <a

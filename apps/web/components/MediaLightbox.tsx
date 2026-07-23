@@ -14,6 +14,8 @@ export interface LightboxItem {
   poster?: string;
   /** CSS aspect-ratio for the video box, when known. */
   aspect?: string;
+  /** Video known to have no audio track. */
+  silent?: boolean;
   title?: string;
 }
 
@@ -105,7 +107,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem; onClose: 
               : { aspectRatio: aspect ?? FALLBACK_VIDEO_ASPECT, maxHeight: "85vh" }
           }
         >
-          <VideoPlayer src={item.src} poster={item.poster} onAspect={setAspect} />
+          <VideoPlayer src={item.src} poster={item.poster} silent={item.silent} onAspect={setAspect} />
         </div>
       ) : (
         <div onClick={(e) => e.stopPropagation()} className="relative flex max-h-full">

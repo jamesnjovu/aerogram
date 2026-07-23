@@ -44,6 +44,11 @@ export interface MediaMeta {
   height?: number;
   /** Duration in seconds for audio/video. */
   duration?: number;
+  /**
+   * Video that carries no audio track at all — Telegram's `nosound` flag, or a GIF (which is
+   * a silent MP4). Only ever true when Telegram says so; false/absent isn't a guarantee.
+   */
+  silent?: boolean;
   /** True when a small thumbnail is available for inline preview. */
   hasThumb: boolean;
   /** Location messages. */
@@ -64,6 +69,18 @@ export interface MessageButton {
   url?: string;
   /** base64-encoded callback data (for callback buttons). */
   data?: string;
+}
+
+/** Link-ish spans Telegram marks up inside message text. */
+export type MessageEntityType = "url" | "text_url" | "email" | "mention";
+
+export interface MessageEntity {
+  type: MessageEntityType;
+  /** Start offset in UTF-16 code units — i.e. a plain JS string index. */
+  offset: number;
+  length: number;
+  /** Target of a `text_url` entity, whose visible text differs from the link. */
+  url?: string;
 }
 
 export interface MessageDTO {
@@ -87,6 +104,8 @@ export interface MessageDTO {
   };
   /** Inline/reply keyboard buttons attached to the message (bots). */
   buttons?: MessageButton[][];
+  /** Links Telegram marked up in `text`, including ones whose URL isn't in the text. */
+  entities?: MessageEntity[];
 }
 
 export interface BotCallbackResponse {
@@ -205,6 +224,32 @@ export interface ChatInfoDTO {
 }
 
 export type SharedMediaType = "media" | "file" | "link" | "music" | "voice" | "gif";
+
+/** A public @username resolved to a chat the client can navigate to. */
+export interface ResolveChatResponse {
+  id: string;
+  title: string;
+  type: ChatType;
+}
+
+/** What a `t.me/+hash` invite link points at. */
+export interface InviteInfoResponse {
+  /** Set when the account is already in the chat (or may peek) — open it directly. */
+  chat?: ResolveChatResponse;
+  /** Set when joining is still required; shown for confirmation before anything happens. */
+  preview?: {
+    title: string;
+    memberCount?: number;
+    /** The chat admits members by approval, so joining only sends a request. */
+    requestNeeded: boolean;
+  };
+}
+
+export interface JoinInviteResponse {
+  chat?: ResolveChatResponse;
+  /** The chat requires approval: a join request was sent and there's nothing to open yet. */
+  requested?: boolean;
+}
 
 /* ------------------------------------------------------------------ */
 /* Attachments + bots                                                  */

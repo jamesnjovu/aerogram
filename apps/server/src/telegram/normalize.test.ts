@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { idStr, normalizeMediaMeta, normalizeMessage } from "./normalize";
+import { idStr, normalizeEntities, normalizeMediaMeta, normalizeMessage } from "./normalize";
 
 describe("idStr", () => {
   it("stringifies numbers/bigints and passes through null", () => {
@@ -72,5 +72,44 @@ describe("normalizeMessage", () => {
       replyToId: 3,
       media: null,
     });
+    expect(dto.entities).toBeUndefined();
+  });
+
+  it("carries link entities through", () => {
+    const dto = normalizeMessage(
+      {
+        id: 6,
+        message: "read this",
+        entities: [
+          { className: "MessageEntityTextUrl", offset: 5, length: 4, url: "https://example.com" },
+        ],
+      },
+      "-100123",
+    );
+    expect(dto.entities).toEqual([
+      { type: "text_url", offset: 5, length: 4, url: "https://example.com" },
+    ]);
+  });
+});
+
+describe("normalizeEntities", () => {
+  it("returns undefined for missing or unsupported entities", () => {
+    expect(normalizeEntities(undefined)).toBeUndefined();
+    expect(normalizeEntities([{ className: "MessageEntityBold", offset: 0, length: 2 }]))
+      .toBeUndefined();
+  });
+
+  it("keeps urls and emails, dropping malformed spans", () => {
+    expect(
+      normalizeEntities([
+        { className: "MessageEntityUrl", offset: 0, length: 11 },
+        { className: "MessageEntityEmail", offset: 20, length: 15 },
+        { className: "MessageEntityUrl", offset: 40, length: 0 },
+        { className: "MessageEntityUrl", length: 5 },
+      ]),
+    ).toEqual([
+      { type: "url", offset: 0, length: 11 },
+      { type: "email", offset: 20, length: 15 },
+    ]);
   });
 });

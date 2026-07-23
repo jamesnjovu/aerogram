@@ -6,6 +6,8 @@ import type { MessageButton, MessageDTO } from "@aerogram/shared";
 import { api } from "@/lib/api";
 import { timeLabel, formatDuration } from "@/lib/format";
 import { MediaAttachment } from "./MediaAttachment";
+import { RichText } from "./RichText";
+import { useTelegramLink } from "@/lib/useTelegramLink";
 
 function MenuItem({
   children,
@@ -49,10 +51,12 @@ export function MessageBubble({
 }) {
   const [menu, setMenu] = useState(false);
   const qc = useQueryClient();
+  const { open: openLink, overlay: linkOverlay } = useTelegramLink();
 
   async function onButton(b: MessageButton) {
     if (b.kind === "url" && b.url) {
-      window.open(b.url, "_blank", "noopener");
+      // Buttons pointing at a chat (t.me/…) open in-app, same as a link in the text would.
+      if (!(await openLink(b.url))) window.open(b.url, "_blank", "noopener");
       return;
     }
     if (b.kind === "text") {
@@ -64,7 +68,7 @@ export function MessageBubble({
     if (b.kind === "callback" && b.data) {
       try {
         const res = await api.botCallback(chatId, message.id, b.data);
-        if (res.url) window.open(res.url, "_blank", "noopener");
+        if (res.url && !(await openLink(res.url))) window.open(res.url, "_blank", "noopener");
         if (res.text) onNotice(res.text);
       } catch {
         onNotice("Action failed");
@@ -160,7 +164,7 @@ export function MessageBubble({
           {message.media && <MediaAttachment chatId={chatId} message={message} />}
           {message.text && (
             <div className="whitespace-pre-wrap break-words text-[15px] leading-snug">
-              {message.text}
+              <RichText text={message.text} entities={message.entities} />
             </div>
           )}
           <div
@@ -237,6 +241,8 @@ export function MessageBubble({
           </div>
         </>
       )}
+
+      {linkOverlay}
     </div>
   );
 }

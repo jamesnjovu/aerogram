@@ -6,6 +6,8 @@ import type {
   MediaType,
   MessageButton,
   MessageDTO,
+  MessageEntity,
+  MessageEntityType,
   MeDTO,
 } from "@aerogram/shared";
 
@@ -21,7 +23,7 @@ export function idStr(v: unknown): string | null {
   return String(v);
 }
 
-function entityType(entity: unknown): ChatType {
+export function entityType(entity: unknown): ChatType {
   const cls = (entity as { className?: string })?.className;
   if (cls === "Channel") {
     // megagroups (supergroups) are Channels with megagroup=true → treat as group
@@ -31,7 +33,7 @@ function entityType(entity: unknown): ChatType {
   return "user";
 }
 
-function entityTitle(entity: unknown): string {
+export function entityTitle(entity: unknown): string {
   const e = entity as {
     title?: string;
     firstName?: string;
@@ -136,6 +138,7 @@ export function normalizeMediaMeta(media: unknown): MediaMeta | null {
     const audio = attrs.find((a) => a.className === "DocumentAttributeAudio");
     const sticker = attrs.find((a) => a.className === "DocumentAttributeSticker");
     const image = attrs.find((a) => a.className === "DocumentAttributeImageSize");
+    const animated = attrs.find((a) => a.className === "DocumentAttributeAnimated");
     const fileNameAttr = attrs.find((a) => a.className === "DocumentAttributeFilename");
 
     let type: MediaType = "document";
@@ -144,6 +147,8 @@ export function normalizeMediaMeta(media: unknown): MediaMeta | null {
     else if (audio) type = audio.voice ? "voice" : "audio";
 
     const dims = video ?? image;
+    // GIFs are silent MP4s; other videos say so with the nosound flag.
+    const silent = type === "video" ? Boolean(video?.nosound || animated) : false;
     return {
       type,
       fileName: fileNameAttr?.fileName,
@@ -153,6 +158,7 @@ export function normalizeMediaMeta(media: unknown): MediaMeta | null {
       height: dims?.h,
       duration: video?.duration ?? audio?.duration,
       hasThumb: Array.isArray(doc.thumbs) && doc.thumbs.length > 0,
+      ...(silent ? { silent: true } : {}),
     };
   }
 
@@ -273,10 +279,36 @@ function normalizeButtons(rm: any): MessageButton[][] | undefined {
 }
 
 /** Normalize an Api.Message or Api.MessageService. `chatId` is the marked chat id string. */
+const ENTITY_TYPES: Record<string, MessageEntityType> = {
+  MessageEntityUrl: "url",
+  MessageEntityTextUrl: "text_url",
+  MessageEntityEmail: "email",
+  MessageEntityMention: "mention",
+};
+
+/**
+ * Keep the link-ish entities Telegram attached to the message text. Offsets are UTF-16 code
+ * units on the wire, which is exactly how JS indexes strings, so they pass through untouched.
+ * `text_url` is the one that can't be recovered client-side: its URL isn't in the text at all.
+ */
+export function normalizeEntities(entities: unknown): MessageEntity[] | undefined {
+  if (!Array.isArray(entities)) return undefined;
+  const out: MessageEntity[] = [];
+  for (const raw of entities) {
+    const e = raw as { className?: string; offset?: number; length?: number; url?: string };
+    const type = e?.className ? ENTITY_TYPES[e.className] : undefined;
+    if (!type || typeof e.offset !== "number" || typeof e.length !== "number") continue;
+    if (e.length <= 0) continue;
+    out.push({ type, offset: e.offset, length: e.length, ...(e.url ? { url: e.url } : {}) });
+  }
+  return out.length ? out : undefined;
+}
+
 export function normalizeMessage(msg: any, chatId: string): MessageDTO {
   const isService = msg.className === "MessageService";
   const call = callInfo(msg);
   const buttons = isService ? undefined : normalizeButtons(msg.replyMarkup);
+  const entities = isService ? undefined : normalizeEntities(msg.entities);
   return {
     id: msg.id,
     chatId,
@@ -289,6 +321,7 @@ export function normalizeMessage(msg: any, chatId: string): MessageDTO {
     service: isService,
     ...(call ? { call } : {}),
     ...(buttons ? { buttons } : {}),
+    ...(entities ? { entities } : {}),
   };
 }
 
